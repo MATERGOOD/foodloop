@@ -4,11 +4,19 @@ import path from "path";
 import { fileURLToPath } from "url";
 import authRoutes from "./routes/authRoutes.js";
 import foodRoutes from "./routes/foodRoutes.js";
+import requestRoutes from "./routes/requestRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
+import reportRoutes from "./routes/reportRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
+import { initExpiryJob } from "./jobs/expiryJob.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Start node-cron expiry job
+initExpiryJob();
 
 // Middleware
 app.use(cors());
@@ -27,9 +35,13 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// API Routes
+// API Routes (Mounted above 404 handler)
 app.use("/api/auth", authRoutes);
 app.use("/api/food", foodRoutes);
+app.use("/api/requests", requestRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/reports", reportRoutes);
+app.use("/api/admin", adminRoutes);
 
 // 404 Not Found Handler
 app.use((req, res) => {

@@ -1,0 +1,271 @@
+### FoodLoop Backend - Full Demo Flow Test Suite
+### REST Client syntax (compatible with VS Code REST Client extension)
+### Base URL
+@baseUrl = http://localhost:5000/api
+
+### Variables (Update these after each step or use response variables)
+@donorEmail = donor.demo@foodloop.org
+@ngoEmail = ngo.demo@foodloop.org
+@adminEmail = admin.demo@foodloop.org
+@password = Password123!
+
+###############################################################################
+# 1. HEALTH CHECK
+###############################################################################
+### Check API Health
+GET {{baseUrl}}/health
+Content-Type: application/json
+
+###############################################################################
+# 2. AUTHENTICATION & SETUP
+###############################################################################
+### 2.1 Register Donor
+# @name registerDonor
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Rajesh Chef",
+  "email": "{{donorEmail}}",
+  "password": "{{password}}",
+  "phone": "+919876543210",
+  "role": "donor",
+  "organizationName": "Grand Palace Banquet",
+  "organizationDescription": "Event catering and hospitality"
+}
+
+### 2.2 Login Donor
+# @name loginDonor
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{donorEmail}}",
+  "password": "{{password}}"
+}
+
+### Capture Donor Token
+@donorToken = {{loginDonor.response.body.data.token}}
+
+### 2.3 Register NGO (Starts in 'pending' verificationStatus)
+# @name registerNGO
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Helping Hands Foundation",
+  "email": "{{ngoEmail}}",
+  "password": "{{password}}",
+  "phone": "+919876500000",
+  "role": "ngo",
+  "organizationName": "Helping Hands",
+  "organizationDescription": "Community food relief and shelter operations"
+}
+
+### 2.4 Login NGO
+# @name loginNGO
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{ngoEmail}}",
+  "password": "{{password}}"
+}
+
+### Capture NGO Token and User ID
+@ngoToken = {{loginNGO.response.body.data.token}}
+@ngoUserId = {{loginNGO.response.body.data.user._id}}
+
+### 2.5 Register Admin
+# @name registerAdmin
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "name": "Super Admin",
+  "email": "{{adminEmail}}",
+  "password": "{{password}}",
+  "phone": "+919876511111",
+  "role": "admin"
+}
+
+### 2.6 Login Admin
+# @name loginAdmin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{password}}"
+}
+
+### Capture Admin Token
+@adminToken = {{loginAdmin.response.body.data.token}}
+
+###############################################################################
+# 3. ADMIN VERIFIES NGO
+###############################################################################
+### 3.1 Admin lists users (check pending NGOs)
+GET {{baseUrl}}/admin/users?role=ngo&verificationStatus=pending
+Authorization: Bearer {{adminToken}}
+
+### 3.2 Admin verifies the NGO
+# @name verifyNGO
+PATCH {{baseUrl}}/admin/users/{{ngoUserId}}/verify
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "verificationStatus": "verified"
+}
+
+###############################################################################
+# 4. DONOR CREATES FOOD LISTING
+###############################################################################
+### 4.1 Donor creates food listing (50 meals)
+# @name createListing
+POST {{baseUrl}}/food
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{
+  "foodName": "Fresh Dal Makhani and Jeera Rice",
+  "description": "Leftover fresh hot meals from evening banquet. Packed in clean sealed containers.",
+  "category": "cooked",
+  "quantity": 50,
+  "unit": "meals",
+  "preparationTime": "2026-11-06T14:00:00.000Z",
+  "safePickupDeadline": "2026-11-08T22:00:00.000Z",
+  "storageConditions": "Insulated hot box, keep covered",
+  "foodSafetyDeclaration": true,
+  "pickupInstructions": "Rear Entrance Gate 3, ask security for Chef Rajesh. Phone: +919876543210"
+}
+
+### Capture Listing ID
+@listingId = {{createListing.response.body.data.listing._id}}
+
+### 4.2 Donor views their own listings
+GET {{baseUrl}}/food/mine
+Authorization: Bearer {{donorToken}}
+
+###############################################################################
+# 5. NGO BROWSES & REQUESTS FOOD
+###############################################################################
+### 5.1 NGO browses available food (donor phone & pickup instructions are hidden!)
+GET {{baseUrl}}/food
+Authorization: Bearer {{ngoToken}}
+
+### 5.2 NGO views single listing before approval (contact details still hidden)
+GET {{baseUrl}}/food/{{listingId}}
+Authorization: Bearer {{ngoToken}}
+
+### 5.3 NGO submits request for 30 meals
+# @name createRequest
+POST {{baseUrl}}/requests
+Authorization: Bearer {{ngoToken}}
+Content-Type: application/json
+
+{
+  "foodListingId": "{{listingId}}",
+  "requestedQuantity": 30,
+  "message": "We have 45 residents at City Shelter needing dinner tonight."
+}
+
+### Capture Request ID
+@requestId = {{createRequest.response.body.data.request._id}}
+
+### 5.4 NGO views their own requests (status is 'pending'; contact hidden)
+GET {{baseUrl}}/requests/my
+Authorization: Bearer {{ngoToken}}
+
+###############################################################################
+# 6. DONOR APPROVES REQUEST
+###############################################################################
+### 6.1 Donor views received requests
+GET {{baseUrl}}/requests/received
+Authorization: Bearer {{donorToken}}
+
+### 6.2 Donor approves the request (atomic reservation: 30 meals reserved, 20 remaining)
+# @name approveRequest
+PATCH {{baseUrl}}/requests/{{requestId}}/approve
+Authorization: Bearer {{donorToken}}
+
+###############################################################################
+# 7. CONTACT REVEALED TO APPROVED REQUESTER
+###############################################################################
+### 7.1 NGO views the approved request (donor phone, email, and pickup instructions REVEALED)
+GET {{baseUrl}}/requests/{{requestId}}
+Authorization: Bearer {{ngoToken}}
+
+### 7.2 NGO views listing details (now REVEALED because request is approved)
+GET {{baseUrl}}/food/{{listingId}}
+Authorization: Bearer {{ngoToken}}
+
+###############################################################################
+# 8. HANDOVER & DISTRIBUTION
+###############################################################################
+### 8.1 Confirm food collection / handover (status -> 'collected')
+PATCH {{baseUrl}}/requests/{{requestId}}/collect
+Authorization: Bearer {{donorToken}}
+
+### 8.2 NGO records distribution (30 meals to 45 beneficiaries; status -> 'distributed')
+PATCH {{baseUrl}}/requests/{{requestId}}/distribute
+Authorization: Bearer {{ngoToken}}
+Content-Type: application/json
+
+{
+  "quantityDistributed": 30,
+  "beneficiaryCount": 45,
+  "distributionNotes": "Successfully distributed to all residents at City Night Shelter."
+}
+
+###############################################################################
+# 9. NOTIFICATIONS
+###############################################################################
+### 9.1 NGO checks notifications
+# @name getNgoNotifications
+GET {{baseUrl}}/notifications
+Authorization: Bearer {{ngoToken}}
+
+### 9.2 Donor checks notifications
+GET {{baseUrl}}/notifications
+Authorization: Bearer {{donorToken}}
+
+###############################################################################
+# 10. REPORTS
+###############################################################################
+### 10.1 NGO submits an inquiry / report
+# @name createReport
+POST {{baseUrl}}/reports
+Authorization: Bearer {{ngoToken}}
+Content-Type: application/json
+
+{
+  "foodListingId": "{{listingId}}",
+  "reason": "Feedback on packaging",
+  "description": "Food was excellent! Minor suggestion to label containers with preparation date."
+}
+
+### Capture Report ID
+@reportId = {{createReport.response.body.data.report._id}}
+
+### 10.2 Admin lists reports
+GET {{baseUrl}}/admin/reports
+Authorization: Bearer {{adminToken}}
+
+### 10.3 Admin updates report
+PATCH {{baseUrl}}/admin/reports/{{reportId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "resolved",
+  "adminRemarks": "Feedback noted and shared with catering committee."
+}
+
+###############################################################################
+# 11. ADMIN DASHBOARD STATS
+###############################################################################
+### 11.1 Admin views updated platform statistics
+GET {{baseUrl}}/admin/dashboard
+Authorization: Bearer {{adminToken}}
