@@ -1,0 +1,61 @@
+### 1. Register donor (expect 201)
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Test Donor",
+  "email": "donor@test.com",
+  "password": "Test1234",
+  "phone": "9999999999",
+  "role": "donor"
+}
+
+### 2. Register as admin (expect 400)
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Hacker",
+  "email": "hacker@test.com",
+  "password": "Test1234",
+  "role": "admin"
+}
+
+### 3. NGO without organizationName (expect 400)
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Test NGO",
+  "email": "ngo@test.com",
+  "password": "Test1234",
+  "role": "ngo"
+}
+
+### 4. NGO with organizationName (expect 201, pending)
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Test NGO",
+  "email": "ngo@test.com",
+  "password": "Test1234",
+  "role": "ngo",
+  "organizationName": "Helping Hands"
+}
+
+### 5. Login (expect 200 and a token)
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "donor@test.com",
+  "password": "Test1234"
+}
+
+### 6. /me without a token (expect 401)
+GET http://localhost:5000/api/auth/me
+
+### 7. /me with a token (paste the token from test 5)
+GET http://localhost:5000/api/auth/me
+Authorization: Bearer PASTE_TOKEN_HERE
